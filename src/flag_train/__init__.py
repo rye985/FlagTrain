@@ -2,6 +2,7 @@
 
 from flag_train import runtime, testing
 from flag_train.deepspeed.lamb import lamb
+from flag_train.deepspeed.multi_tensor_adam import multi_tensor_adam
 
 device = runtime.device.name
 vendor_name = runtime.device.vendor_name
@@ -27,6 +28,7 @@ class use_train:
 __all__ = [
     "device",
     "lamb",
+    "multi_tensor_adam",
     "use_train",
     "vendor_name",
 ]
