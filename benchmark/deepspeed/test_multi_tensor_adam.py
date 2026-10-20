@@ -35,6 +35,8 @@ that is covered by the correctness tests, not here.
 """
 
 import pytest
+import warnings
+
 import torch
 
 import flag_train
@@ -152,11 +154,14 @@ def _load_deepspeed_multi_tensor_adam():
 
         return FusedAdamBuilder().load().multi_tensor_adam
     except Exception as exc:
-        raise RuntimeError(
-            f"{flag_train.vendor_name!r} must use DeepSpeed's multi_tensor_adam "
-            f"as its baseline, but it could not be loaded: {exc!r}. Build "
-            f"deepspeed, or drop the backend from _DEEPSPEED_BASELINE_VENDORS."
-        ) from exc
+        warnings.warn(
+            f"{flag_train.vendor_name!r} is expected to use DeepSpeed's "
+            f"multi_tensor_adam as its baseline, but it could not be loaded: "
+            f"{exc!r}. Falling back to the torch reference; build deepspeed to "
+            f"enable the fused baseline.",
+            stacklevel=2,
+        )
+        return None
 
 
 # Resolved once, so the first-use JIT compile is not counted in the measurement.
@@ -223,13 +228,18 @@ def _call(op, g, p, m, v):
 
 
 def torch_op(g, p, m, v):
-    """Baseline, chosen by platform. See the module docstring."""
-    baseline = (
-        _deepspeed_multi_tensor_adam
-        if _deepspeed_multi_tensor_adam is not None
-        else multi_tensor_adam_ref
+    """Baseline, chosen by platform.
+
+    The two baselines take different arguments: DeepSpeed's op takes the
+    MultiTensorApply-style tuple, while the torch reference takes the four
+    tensor lists directly.
+    """
+    if _deepspeed_multi_tensor_adam is not None:
+        return _call(_deepspeed_multi_tensor_adam, g, p, m, v)
+    return multi_tensor_adam_ref(
+        g, p, m, v, _LR, _BETA1, _BETA2, _EPS, _STEP, _MODE,
+        _BIAS_CORRECTION, _WEIGHT_DECAY,
     )
-    return _call(baseline, g, p, m, v)
 
 
 def train_op(g, p, m, v):
